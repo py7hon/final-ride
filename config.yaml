@@ -1,0 +1,6 @@
+swarm_api: https://api.gateway.ethswarm.org
+download_link: https://your-frontend-url.com/download.html?metadata=%s&key=%s
+chunk_size_mb: 10
+theme: dark
+download_dir: C:\Users\Admin\Downloads
+encrypt_default: true

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Ride - Swarm Web Downloader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2196f3;
+            --bg: #121212;
+            --surface: #1e1e1e;
+            --text: #ffffff;
+            --text-light: #b0b0b0;
+            --border: #333333;
+            --success: #4caf50;
+            --error: #f44336;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+
+        h1,
+        h2 {
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--primary);
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: var(--text-light);
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 12px;
+            box-sizing: border-box;
+            font-family: inherit;
+            margin-bottom: 16px;
+        }
+
+        button {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: inherit;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            background: var(--text-light);
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background-color: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 16px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: var(--primary);
+            transition: width 0.3s ease;
+        }
+
+        .status {
+            font-size: 0.9em;
+            color: var(--text-light);
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        a {
+            color: var(--primary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>FINAL RIDE WEB</h1>
+
+        <!-- Upload Section -->
+        <div class="card">
+            <h2>Upload File</h2>
+            <form id="uploadForm">
+                <label for="file">Select File</label>
+                <input type="file" id="file" required>
+
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="encryptCheck" style="width: auto; margin-right: 10px; margin-bottom: 0;">
+                    Encrypt file (AES-256-GCM)
+                </label>
+                <br>
+                <button type="submit" id="uploadBtn">Start Upload</button>
+            </form>
+            <div id="uploadProgressContainer" class="progress-container">
+                <div id="uploadProgressBar" class="progress-bar"></div>
+            </div>
+            <div id="uploadSpeed" class="status" style="font-weight: bold; color: var(--primary);"></div>
+            <p id="uploadStatus" class="status"></p>
+            <p id="uploadResult" style="word-break: break-all; text-align: center;"></p>
+        </div>
+
+        <!-- Download Section -->
+        <div class="card">
+            <h2>Download File</h2>
+            <form id="downloadForm">
+                <label for="metadataCID">Metadata Swarm CID</label>
+                <input type="text" id="metadataCID" placeholder="Enter Swarm CID" required>
+
+                <button type="submit" id="downloadBtn">Download</button>
+            </form>
+            <div id="downloadProgressContainer" class="progress-container">
+                <div id="downloadProgressBar" class="progress-bar"></div>
+            </div>
+            <div id="downloadSpeed" class="status" style="font-weight: bold; color: var(--primary);"></div>
+            <p id="downloadStatus" class="status"></p>
+        </div>
+    </div>
+
+    <script>
+        const SWARM_API = 'https://api.gateway.ethswarm.org/bzz';
+
+        // Utility Functions
+        function base64ToArrayBuffer(base64) {
+            const binaryString = atob(base64.trim());
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        async function uploadToSwarm(data) {
+            const response = await fetch(SWARM_API, {
+                method: 'POST',
+                body: data,
+                headers: { 'Content-Type': 'application/octet-stream' }
+            });
+            if (!response.ok) throw new Error(`Swarm Upload Failed: ${response.statusText}`);
+            const { reference } = await response.json();
+            return reference;
+        }
+
+        async function downloadFromSwarm(cid) {
+            const response = await fetch(`${SWARM_API}/${cid}`);
+            if (!response.ok) throw new Error(`Swarm Download Failed: ${response.statusText}`);
+            return new Uint8Array(await response.arrayBuffer());
+        }
+
+        // AES-GCM Encryption (Go-Compatible: Nonce prepended)
+        async function encryptGCM(data, keyBuffer) {
+            const cryptoKey = await crypto.subtle.importKey(
+                'raw', keyBuffer, { name: 'AES-GCM' }, false, ['encrypt']
+            );
+            const nonce = crypto.getRandomValues(new Uint8Array(12));
+            const ciphertext = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: nonce }, cryptoKey, data
+            );
+            const combined = new Uint8Array(12 + ciphertext.byteLength);
+            combined.set(nonce, 0);
+            combined.set(new Uint8Array(ciphertext), 12);
+            return combined;
+        }
+
+        async function decryptGCM(combined, keyBuffer) {
+            const cryptoKey = await crypto.subtle.importKey(
+                'raw', keyBuffer, { name: 'AES-GCM' }, false, ['decrypt']
+            );
+            const nonce = combined.slice(0, 12);
+            const ciphertext = combined.slice(12);
+            const decrypted = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: nonce }, cryptoKey, ciphertext
+            );
+            return new Uint8Array(decrypted);
+        }
+
+        async function calculateHash(data) {
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function formatSpeed(bytesPerSec) {
+            if (bytesPerSec >= 1024 * 1024 * 1024) return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + ' GB/s';
+            if (bytesPerSec >= 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(2) + ' MB/s';
+            if (bytesPerSec >= 1024) return (bytesPerSec / 1024).toFixed(2) + ' KB/s';
+            return bytesPerSec.toFixed(2) + ' B/s';
+        }
+
+        // --- UPLOAD LOGIC ---
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = document.getElementById('file').files[0];
+            const encrypt = document.getElementById('encryptCheck').checked;
+            if (!file) return;
+
+            const btn = document.getElementById('uploadBtn');
+            const status = document.getElementById('uploadStatus');
+            const progress = document.getElementById('uploadProgressBar');
+            const progressContainer = document.getElementById('uploadProgressContainer');
+            const result = document.getElementById('uploadResult');
+
+            try {
+                btn.disabled = true;
+                progressContainer.style.display = 'block';
+                result.innerHTML = '';
+
+                let data = new Uint8Array(await file.arrayBuffer());
+                let encryptionKey = null;
+
+                if (encrypt) {
+                    status.innerText = "Encrypting file...";
+                    encryptionKey = crypto.getRandomValues(new Uint8Array(32));
+                    data = await encryptGCM(data, encryptionKey);
+                }
+
+                const chunkSize = 10 * 1024 * 1024; // 10MB
+                let metadata = {
+                    filename: file.name,
+                    encrypted: encrypt,
+                    chunked: data.length > chunkSize
+                };
+
+                if (encrypt) metadata.key = arrayBufferToBase64(encryptionKey);
+
+                const uploadStartTime = Date.now();
+                const uploadSpeedEl = document.getElementById('uploadSpeed');
+
+                if (metadata.chunked) {
+                    status.innerText = "Splitting into chunks...";
+                    const chunks = [];
+                    for (let i = 0; i < data.length; i += chunkSize) {
+                        chunks.push(data.slice(i, i + chunkSize));
+                    }
+
+                    const chunkIDs = {};
+                    const chunkHashes = {};
+                    let uploadedBytes = 0;
+
+                    for (let i = 0; i < chunks.length; i++) {
+                        status.innerText = `Uploading chunk ${i + 1}/${chunks.length}...`;
+                        const chunkRef = await uploadToSwarm(chunks[i]);
+                        const chunkHash = await calculateHash(chunks[i]);
+
+                        chunkIDs[i + 1] = chunkRef;
+                        chunkHashes[i + 1] = chunkHash;
+
+                        uploadedBytes += chunks[i].length;
+                        const elapsed = (Date.now() - uploadStartTime) / 1000;
+                        if (elapsed > 0) uploadSpeedEl.innerText = formatSpeed(uploadedBytes / elapsed);
+
+                        progress.style.width = `${((i + 1) / chunks.length) * 100}%`;
+                    }
+                    metadata.chunk_ids = chunkIDs;
+                    metadata.chunk_hashes = chunkHashes;
+                } else {
+                    status.innerText = "Uploading file...";
+                    metadata.file_id = await uploadToSwarm(data);
+                    metadata.file_hash = await calculateHash(data);
+
+                    const elapsed = (Date.now() - uploadStartTime) / 1000;
+                    if (elapsed > 0) uploadSpeedEl.innerText = formatSpeed(data.length / elapsed);
+
+                    progress.style.width = '100%';
+                }
+
+                status.innerText = "Uploading metadata...";
+                const metadataCID = await uploadToSwarm(JSON.stringify(metadata));
+
+                status.innerText = "Upload Complete!";
+                result.innerHTML = `Success! Metadata CID:<br><strong>${metadataCID}</strong>`;
+            } catch (err) {
+                status.innerText = "Error: " + err.message;
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // --- DOWNLOAD LOGIC ---
+        document.getElementById('downloadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const metadataCID = document.getElementById('metadataCID').value.trim();
+
+            const btn = document.getElementById('downloadBtn');
+            const status = document.getElementById('downloadStatus');
+            const progress = document.getElementById('downloadProgressBar');
+            const progressContainer = document.getElementById('downloadProgressContainer');
+            const downloadSpeedEl = document.getElementById('downloadSpeed');
+
+            try {
+                btn.disabled = true;
+                progressContainer.style.display = 'block';
+                status.innerText = "Initializing...";
+                downloadSpeedEl.innerText = "";
+
+                if (!metadataCID) throw new Error("Please provide metadata CID");
+
+                // 1. Get Metadata
+                status.innerText = "Fetching metadata from Swarm...";
+                const raw = await downloadFromSwarm(metadataCID);
+                const metadataRaw = new TextDecoder().decode(raw);
+
+                // 2. Parse Metadata
+                const metadataObj = JSON.parse(metadataRaw);
+
+                const { filename, encrypted, chunked, chunk_ids, file_id, key } = metadataObj;
+                const downloadStartTime = Date.now();
+                let downloadedBytes = 0;
+
+                // 3. Download Content
+                let downloadedData = null;
+
+                if (chunked) {
+                    const ids = Object.entries(chunk_ids).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+                    const chunks = [];
+                    for (let i = 0; i < ids.length; i++) {
+                        status.innerText = `Downloading chunk ${i + 1}/${ids.length}...`;
+                        const chunk = await downloadFromSwarm(ids[i][1]);
+                        chunks.push(chunk);
+
+                        downloadedBytes += chunk.length;
+                        const elapsed = (Date.now() - downloadStartTime) / 1000;
+                        if (elapsed > 0) downloadSpeedEl.innerText = formatSpeed(downloadedBytes / elapsed);
+
+                        progress.style.width = `${((i + 1) / ids.length) * 100}%`;
+                    }
+
+                    status.innerText = "Reassembling chunks...";
+                    let totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+                    downloadedData = new Uint8Array(totalLen);
+                    let offset = 0;
+                    for (const c of chunks) {
+                        downloadedData.set(c, offset);
+                        offset += c.length;
+                    }
+                } else {
+                    status.innerText = "Downloading file...";
+                    downloadedData = await downloadFromSwarm(file_id);
+
+                    const elapsed = (Date.now() - downloadStartTime) / 1000;
+                    if (elapsed > 0) downloadSpeedEl.innerText = formatSpeed(downloadedData.length / elapsed);
+
+                    progress.style.width = '100%';
+                }
+
+                // 4. Decrypt Content
+                let finalData = downloadedData;
+                if (encrypted) {
+                    status.innerText = "Decrypting file...";
+                    const fileKey = new Uint8Array(base64ToArrayBuffer(key));
+                    finalData = await decryptGCM(downloadedData, fileKey);
+                }
+
+                // 5. Trigger Browser Download
+                status.innerText = "Saving file...";
+                const blob = new Blob([finalData], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.click();
+
+                status.innerText = "Download Complete!";
+            } catch (err) {
+                status.innerText = "Error: " + err.message;
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+
+</html>
