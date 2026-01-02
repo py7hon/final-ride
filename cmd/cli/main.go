@@ -304,7 +304,7 @@ func main() {
 		fmt.Printf("Total time: %s\n", formatDuration(totalDuration))
 		fmt.Printf("Average speed: %s\n", formatSpeed(avgSpeed))
 		fmt.Println("----------------------------------------")
-		fmt.Printf("Download Link:\n%s\n", fmt.Sprintf(config.DownloadLink, metadataCID, metadata.Key))
+		fmt.Printf("Shareable Download Link:\n%s\n", fmt.Sprintf(config.DownloadLink, metadataCID))
 
 	case "download":
 		if len(os.Args) < 3 {
@@ -313,6 +313,17 @@ func main() {
 		}
 
 		metadataCID := os.Args[2]
+
+		// URL Extraction Logic
+		if strings.Contains(metadataCID, "download=") {
+			parts := strings.Split(metadataCID, "download=")
+			if len(parts) > 1 {
+				extracted := strings.Split(parts[1], "&")[0]
+				fmt.Printf("Extracted CID from URL: %s\n", extracted)
+				metadataCID = extracted
+			}
+		}
+
 		totalStart := time.Now()
 
 		fmt.Println("========================================")

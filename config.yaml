@@ -1,5 +1,6 @@
 swarm_api: https://api.gateway.ethswarm.org
-download_link: https://your-frontend-url.com/download.html?metadata=%s&key=%s
+web_url: https://final-ride.ethswarm.org
+download_link: http://localhost:8080/index.html?download=%s
 chunk_size_mb: 10
 theme: dark
 download_dir: C:\Users\Admin\Downloads

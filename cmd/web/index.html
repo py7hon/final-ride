@@ -327,7 +327,9 @@
                 const metadataCID = await uploadToSwarm(JSON.stringify(metadata));
 
                 status.innerText = "Upload Complete!";
-                result.innerHTML = `Success! Metadata CID:<br><strong>${metadataCID}</strong>`;
+                const shareLink = `${window.location.origin}${window.location.pathname}?download=${metadataCID}`;
+                result.innerHTML = `Success! Metadata CID:<br><strong>${metadataCID}</strong><br><br>
+                Shareable Download Link:<br><a href="${shareLink}" target="_blank">${shareLink}</a>`;
             } catch (err) {
                 status.innerText = "Error: " + err.message;
                 console.error(err);
@@ -426,6 +428,16 @@
                 console.error(err);
             } finally {
                 btn.disabled = false;
+            }
+        });
+
+        // --- AUTO-DOWNLOAD FROM URL ---
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const downloadCID = urlParams.get('download');
+            if (downloadCID) {
+                document.getElementById('metadataCID').value = downloadCID;
+                document.getElementById('downloadForm').dispatchEvent(new Event('submit'));
             }
         });
     </script>

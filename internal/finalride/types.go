@@ -10,6 +10,7 @@ import (
 // Config represents the structure of the config.yaml file
 type Config struct {
 	SwarmAPI       string `yaml:"swarm_api"`       // Swarm API endpoint
+	WebURL         string `yaml:"web_url"`         // Web frontend URL
 	DownloadLink   string `yaml:"download_link"`   // Download link template
 	ChunkSizeMB    int    `yaml:"chunk_size_mb"`   // Chunk size in MB
 	Theme          string `yaml:"theme"`           // UI Theme: "light" or "dark"

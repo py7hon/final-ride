@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,7 +73,7 @@ var (
 
 // Icons
 var (
-	icMenu, icTheme, icUpload, icDownload, icSettings, icInfo, icClose, icCheck, icFolder *widget.Icon
+	icMenu, icTheme, icUpload, icDownload, icSettings, icInfo, icClose, icCheck, icFolder, icPaste *widget.Icon
 )
 
 // AppState holds the application state
@@ -137,6 +138,8 @@ type UI struct {
 
 	// Common
 	copyResultBtn widget.Clickable
+	copyURLBtn    widget.Clickable
+	pasteBtn      widget.Clickable
 	logsList      widget.List
 
 	// File path input
@@ -162,6 +165,7 @@ func init() {
 	icClose, _ = widget.NewIcon(icons.NavigationClose)
 	icCheck, _ = widget.NewIcon(icons.ActionCheckCircle)
 	icFolder, _ = widget.NewIcon(icons.FileFolder)
+	icPaste, _ = widget.NewIcon(icons.ContentContentPaste)
 }
 
 func main() {
@@ -702,14 +706,37 @@ func drawDownloadTab(gtx layout.Context) layout.Dimensions {
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return drawCard(gtx, func(gtx layout.Context) layout.Dimensions {
-				ed := material.Editor(ui.theme, &ui.cidEditor, "Paste Metadata CID here...")
-				ed.Color = CurrentTheme.Text
-				ed.HintColor = CurrentTheme.TextLight
-				ed.Font.Typeface = "Montserrat"
-				border := widget.Border{Color: CurrentTheme.Border, CornerRadius: unit.Dp(4), Width: unit.Dp(1)}
-				return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, ed.Layout)
-				})
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								ed := material.Editor(ui.theme, &ui.cidEditor, "Paste Metadata CID or Web Link here...")
+								ed.Color = CurrentTheme.Text
+								ed.HintColor = CurrentTheme.TextLight
+								ed.Font.Typeface = "Montserrat"
+								border := widget.Border{Color: CurrentTheme.Border, CornerRadius: unit.Dp(4), Width: unit.Dp(1)}
+								return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, ed.Layout)
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Spacer{Width: unit.Dp(12)}.Layout(gtx)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if ui.pasteBtn.Clicked(gtx) {
+									if text, err := clipboard.ReadAll(); err == nil {
+										ui.cidEditor.SetText(text)
+										window.Invalidate()
+									}
+								}
+								btn := material.IconButton(ui.theme, &ui.pasteBtn, icPaste, "Paste from Clipboard")
+								btn.Color = CurrentTheme.Text
+								btn.Inset = layout.UniformInset(unit.Dp(12))
+								return btn.Layout(gtx)
+							}),
+						)
+					}),
+				)
 			})
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -898,6 +925,7 @@ func drawResultSection(gtx layout.Context) layout.Dimensions {
 
 	return drawCard(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			// CID Row
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				l := material.Body2(ui.theme, "Upload Complete. Metadata CID:")
 				l.Color = CurrentTheme.Success
@@ -917,11 +945,54 @@ func drawResultSection(gtx layout.Context) layout.Dimensions {
 						return layout.Spacer{Width: unit.Dp(16)}.Layout(gtx)
 					}),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						btn := material.Button(ui.theme, &ui.copyResultBtn, "Copy")
+						btn := material.Button(ui.theme, &ui.copyResultBtn, "Copy CID")
 						btn.Background = CurrentTheme.Surface
 						btn.Color = CurrentTheme.Primary
 						btn.Inset = layout.UniformInset(unit.Dp(10))
 						return btn.Layout(gtx)
+					}),
+				)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Spacer{Height: unit.Dp(16)}.Layout(gtx)
+			}),
+			// URL Row
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				configMu.Lock()
+				shareURL := fmt.Sprintf(config.DownloadLink, resultCID)
+				configMu.Unlock()
+
+				if ui.copyURLBtn.Clicked(gtx) {
+					clipboard.WriteAll(shareURL)
+				}
+
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						l := material.Body2(ui.theme, "Shareable Download Link:")
+						l.Color = CurrentTheme.TextLight
+						l.Font.Weight = font.Bold
+						l.Font.Typeface = "Montserrat"
+						return layout.Inset{Bottom: unit.Dp(8)}.Layout(gtx, l.Layout)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								l := material.Caption(ui.theme, shareURL)
+								l.Color = CurrentTheme.Primary
+								l.Font.Typeface = "Montserrat"
+								return l.Layout(gtx)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Spacer{Width: unit.Dp(16)}.Layout(gtx)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								btn := material.Button(ui.theme, &ui.copyURLBtn, "Copy Link")
+								btn.Background = CurrentTheme.Surface
+								btn.Color = CurrentTheme.Primary
+								btn.Inset = layout.UniformInset(unit.Dp(10))
+								return btn.Layout(gtx)
+							}),
+						)
 					}),
 				)
 			}),
@@ -1233,6 +1304,19 @@ func performDownload(cid string) {
 		appState.mu.Unlock()
 		window.Invalidate()
 	}()
+
+	// URL Extraction Logic
+	if strings.Contains(cid, "download=") {
+		parts := strings.Split(cid, "download=")
+		if len(parts) > 1 {
+			// Extract CID and remove any trailing params
+			extracted := strings.Split(parts[1], "&")[0]
+			addLog(fmt.Sprintf("Extracted CID from URL: %s", extracted))
+			cid = extracted
+		}
+	} else if strings.HasPrefix(cid, "http") {
+		addLog("Warning: URL detected but no 'download' parameter found.")
+	}
 
 	addLog(fmt.Sprintf("Starting Download CID: %s", cid))
 
