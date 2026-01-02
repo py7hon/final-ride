@@ -1,2 +1,10 @@
-final-ride-cli.exe
-final-ride-gui.exe
+*.app
+*.bat
+*.cgi
+*.com
+*.exe
+*.gadget
+*.jar
+*.pif
+*.vb
+*.wsf
